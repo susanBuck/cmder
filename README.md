@@ -27,7 +27,7 @@ clink.prompt.value = string.gsub(clink.prompt.value, "{lamb}", "$")
 
 
 __Reason for changing:__
-Just to create more consistency with the command prompts in Mac/Unix. This way when the students see `$` in notes, they know it's a command.
+Create more consistency with the command prompts in Mac/Unix. This way when the students see `$` in notes, they know it's a command.
 
 
 
@@ -49,10 +49,21 @@ __Reason for adding:__
 Makes editing admin protected files more straightforward. Previously we had to include a number of different instructions for opening a file as an Admin, which varied from version to version of Windows. With `elevate` it's as straightfoward as `sudo` on Mac/Unix.
 
 
+## Update Clink
+
+Clink is a &ldquo;Powerful Bash-style command line editing for cmd.exe&rdquo;
+
+It lives in `vendor/clink/`
+
+The version of Clink that came with this original build had an issue in Windows 10 where we saw `{lamb}` in the prompt.
+
+Updating to [Clink v0.4.3](https://github.com/mridgers/clink/releases/tag/0.4.3) fixed this issue.
 
 
 
 ## Enabled ssh-agent
+
+*2/4/15: This feature is currently disabled (see comment out in `vendor/init.bat`) because it's not functioning in Windows 10. Not something we technically need in CSCI E-15, so just disabling for now.*
 
 ref: <https://github.com/cmderdev/cmder/issues/193>
 

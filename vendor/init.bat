@@ -46,4 +46,5 @@
 )
 
 :: Enable ssh-agent 
-@call "%CMDER_ROOT%/vendor/agent.cmd"
+:: SB 2/4/15: Disabling, causes "specified file not found" output on Windows 10
+:: @call "%CMDER_ROOT%/vendor/agent.cmd"
