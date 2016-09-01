@@ -8,8 +8,6 @@ Related to this issue: <https://github.com/cmderdev/cmder/issues/501#issuecommen
 Without these, when installing Cmder you were prompted to install missing .dll files.
 
 
-
-
 ## Command prompt
 Changed command prompt from lambda symbol to `$`.
 
@@ -60,10 +58,19 @@ The version of Clink that came with this original build had an issue in Windows 
 Updating to [Clink v0.4.3](https://github.com/mridgers/clink/releases/tag/0.4.3) fixed this issue.
 
 
+## Disable check for updates
+Update `/cmder/config/ConEmu.xml` to disable CheckOnStartup:
+
+```
+<value name="Update.CheckOnStartup" type="hex" data="00"/>
+```
+
+__Reason:__
+Since we're using a forked version of Cmder, we don't want to update via the traditional route.
+
 
 ## Enabled ssh-agent
-
-*2/4/15: This feature is currently disabled (see comment out in `vendor/init.bat`) because it's not functioning in Windows 10. Not something we technically need in CSCI E-15, so just disabling for now.*
+*This feature is currently disabled (see comment out in `vendor/init.bat`) because it's not functioning in Windows 10. Not something we technically need in CSCI E-15, so just disabling for now.*
 
 ref: <https://github.com/cmderdev/cmder/issues/193>
 
