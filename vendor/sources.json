@@ -1,17 +1,22 @@
 [
     {
-        "name": "msysgit",
-        "version": "1.9.4-preview",
-        "url": "https://github.com/msysgit/msysgit/releases/download/Git-1.9.4-preview20140611/PortableGit-1.9.4-preview20140611.7z"
+        "name": "git-for-windows",
+        "version": "v2.15.0.windows.1",
+        "url": "https://github.com/git-for-windows/git/releases/download/v2.15.0.windows.1/PortableGit-2.15.0-32-bit.7z.exe"
     },
     {
         "name": "clink",
-        "version": "0.4.2",
-        "url": "https://github.com/mridgers/clink/releases/download/0.4.2/clink_0.4.2.zip"
+        "version": "0.4.9",
+        "url": "https://github.com/Stanzilla/clink/releases/download/0.4.9/clink_DEV.zip"
     },
     {
         "name": "conemu-maximus5",
-        "version": "140707",
-        "url": "https://conemu.codeplex.com/downloads/get/880090"
+        "version": "171025",
+        "url": "https://github.com/Maximus5/ConEmu/releases/download/v17.10.25/ConEmuPack.171025.7z"
+    },
+    {
+        "name": "clink-completions",
+        "version": "0.3.3",
+        "url": "https://github.com/vladimir-kotikov/clink-completions/archive/0.3.3.zip"
     }
 ]
