@@ -82,8 +82,7 @@ pPVWQxaZLPSkVrQ0uGE3ycJYgBugl6H8WY3pEfbRD0tVNEYqi4Y7
 #Certificate:
 #    Data:
 #        Version: 3 (0x2)
-#        Serial Number:
-#            5e:c3:b7:a6:43:7f:a4:e0
+#        Serial Number: 6828503384748696800 (0x5ec3b7a6437fa4e0)
 #    Signature Algorithm: sha1WithRSAEncryption
 #        Issuer: CN=ACCVRAIZ1, OU=PKIACCV, O=ACCV, C=ES
 #        Validity
@@ -250,8 +249,7 @@ Z05phkOTOPu220+DkdRgfks+KzgHVZhepA==
 #Certificate:
 #    Data:
 #        Version: 3 (0x2)
-#        Serial Number:
-#            61:8d:c7:86:3b:01:82:05
+#        Serial Number: 7029493972724711941 (0x618dc7863b018205)
 #    Signature Algorithm: sha1WithRSAEncryption
 #        Issuer: CN=ACEDICOM Root, OU=PKI, O=EDICOM, C=ES
 #        Validity
@@ -714,8 +712,7 @@ LnPqZih4zR0Uv6CPLy64Lo7yFIrM6bV8+2ydDKXhlg==
 #Certificate:
 #    Data:
 #        Version: 3 (0x2)
-#        Serial Number:
-#            57:0a:11:97:42:c4:e3:cc
+#        Serial Number: 6271844772424770508 (0x570a119742c4e3cc)
 #    Signature Algorithm: sha256WithRSAEncryption
 #        Issuer: C=IT, L=Milan, O=Actalis S.p.A./03358520967, CN=Actalis Authentication Root CA
 #        Validity
@@ -1277,8 +1274,7 @@ nlpOZbWUrhvfKbAW8b8Angc6F2S1BLUjIZkKlTuXfO8=
 #Certificate:
 #    Data:
 #        Version: 3 (0x2)
-#        Serial Number:
-#            77:77:06:27:26:a9:b1:7c
+#        Serial Number: 8608355977964138876 (0x7777062726a9b17c)
 #    Signature Algorithm: sha256WithRSAEncryption
 #        Issuer: C=US, O=AffirmTrust, CN=AffirmTrust Commercial
 #        Validity
@@ -1376,8 +1372,7 @@ x3evZKiT3/Zpg4Jg8klCNO1aAFSFHBY2kgxc+qatv9s=
 #Certificate:
 #    Data:
 #        Version: 3 (0x2)
-#        Serial Number:
-#            7c:4f:04:39:1c:d4:99:2d
+#        Serial Number: 8957382827206547757 (0x7c4f04391cd4992d)
 #    Signature Algorithm: sha1WithRSAEncryption
 #        Issuer: C=US, O=AffirmTrust, CN=AffirmTrust Networking
 #        Validity
@@ -1491,8 +1486,7 @@ KeC2uAloGRwYQw==
 #Certificate:
 #    Data:
 #        Version: 3 (0x2)
-#        Serial Number:
-#            6d:8c:14:46:b1:a6:0a:ee
+#        Serial Number: 7893706540734352110 (0x6d8c1446b1a60aee)
 #    Signature Algorithm: sha384WithRSAEncryption
 #        Issuer: C=US, O=AffirmTrust, CN=AffirmTrust Premium
 #        Validity
@@ -1610,8 +1604,7 @@ flc9nF9Ca/UHLbXwgpP5WW+uZPpY5Yse42O+tYHNbwKMeQ==
 #Certificate:
 #    Data:
 #        Version: 3 (0x2)
-#        Serial Number:
-#            74:97:25:8a:c7:3f:7a:54
+#        Serial Number: 8401224907861490260 (0x7497258ac73f7a54)
 #    Signature Algorithm: ecdsa-with-SHA384
 #        Issuer: C=US, O=AffirmTrust, CN=AffirmTrust Premium ECC
 #        Validity
@@ -2068,8 +2061,7 @@ KrcYPqcZ2Qt9sTdBQrC6YB3y/gkRsPCHe6ed
 #Certificate:
 #    Data:
 #        Version: 3 (0x2)
-#        Serial Number:
-#            5c:33:cb:62:2c:5f:b3:32
+#        Serial Number: 6643877497813316402 (0x5c33cb622c5fb332)
 #    Signature Algorithm: sha256WithRSAEncryption
 #        Issuer: CN=Atos TrustedRoot 2011, O=Atos, C=DE
 #        Validity
@@ -2193,8 +2185,7 @@ jLMi6Et8Vcad+qMUu2WFbm5PEn4KPJ2V
 #Certificate:
 #    Data:
 #        Version: 3 (0x2)
-#        Serial Number:
-#            53:ec:3b:ee:fb:b2:48:5f
+#        Serial Number: 6047274297262753887 (0x53ec3beefbb2485f)
 #    Signature Algorithm: sha1WithRSAEncryption
 #        Issuer: C=ES, CN=Autoridad de Certificacion Firmaprofesional CIF A62634068
 #        Validity
@@ -8918,8 +8909,7 @@ NL/+I5c30jn6PQ0GC7TbO6Orb1wdtn7os4I07QZcJA==
 #Certificate:
 #    Data:
 #        Version: 3 (0x2)
-#        Serial Number:
-#            6a:68:3e:9c:51:9b:cb:53
+#        Serial Number: 7667447206703254355 (0x6a683e9c519bcb53)
 #    Signature Algorithm: sha256WithRSAEncryption
 #        Issuer: C=TR, L=Ankara, O=E-Tu\xC4\x9Fra EBG Bili\xC5\x9Fim Teknolojileri ve Hizmetleri A.\xC5\x9E., OU=E-Tugra Sertifikasyon Merkezi, CN=E-Tugra Certification Authority
 #        Validity
@@ -10729,8 +10719,7 @@ HsDlzx+GJKk8B2bNwdI2Y1k=
 #Certificate:
 #    Data:
 #        Version: 3 (0x2)
-#        Serial Number:
-#            07:ff:ff:ff:ff:ff
+#        Serial Number: 8796093022207 (0x7ffffffffff)
 #    Signature Algorithm: sha1WithRSAEncryption
 #        Issuer: C=US, O=GTE Corporation, OU=GTE CyberTrust Solutions, Inc., CN=GTE CyberTrust Global Root
 #        Validity
@@ -10849,8 +10838,7 @@ B/rqsVFzkxyl3VMRN8gqpxUnHbSqzH+qMTD8uEWfSAntEOLF
 #Certificate:
 #    Data:
 #        Version: 3 (0x2)
-#        Serial Number:
-#            07:ff:ff:ff:ff:ff
+#        Serial Number: 8796093022207 (0x7ffffffffff)
 #    Signature Algorithm: sha1WithRSAEncryption
 #        Issuer: O=Entrust.net, OU=www.entrust.net/CPS_2048 incorp. by ref. (limits liab.), OU=(c) 1999 Entrust.net Limited, CN=Entrust.net Certification Authority (2048)
 #        Validity
@@ -13960,8 +13948,7 @@ XjG4Kvte9nHfRCaexOYNkbQudZWAUWpLMKawYqGT8ZvYzsRjdT9ZR7E=
 #Certificate:
 #    Data:
 #        Version: 3 (0x2)
-#        Serial Number:
-#            49:41:2c:e4:00:10
+#        Serial Number: 80544274841616 (0x49412ce40010)
 #    Signature Algorithm: sha256WithRSAEncryption
 #        Issuer: C=HU, L=Budapest, O=NetLock Kft., OU=Tan\xC3\xBAs\xC3\xADtv\xC3\xA1nykiad\xC3\xB3k (Certification Services), CN=NetLock Arany (Class Gold) F\xC5\x91tan\xC3\xBAs\xC3\xADtv\xC3\xA1ny
 #        Validity
@@ -18152,8 +18139,7 @@ Wr9/6x3iGjjRXK9HkmuAtTClyY3YqzGBH9/CZjfTk6mFhnll0g==
 #Certificate:
 #    Data:
 #        Version: 3 (0x2)
-#        Serial Number:
-#            4e:b2:00:67:0c:03:5d:4f
+#        Serial Number: 5670595323396054351 (0x4eb200670c035d4f)
 #    Signature Algorithm: sha1WithRSAEncryption
 #        Issuer: C=CH, O=SwissSign AG, CN=SwissSign Platinum CA - G2
 #        Validity
@@ -18307,8 +18293,7 @@ tGMU0gYqZ4yD9c7qB9iaah7s5Aq7KkzrCWA5zspi2C5u
 #Certificate:
 #    Data:
 #        Version: 3 (0x2)
-#        Serial Number:
-#            4f:1b:d4:2f:54:bb:2f:4b
+#        Serial Number: 5700383053117599563 (0x4f1bd42f54bb2f4b)
 #    Signature Algorithm: sha1WithRSAEncryption
 #        Issuer: C=CH, O=SwissSign AG, CN=SwissSign Silver CA - G2
 #        Validity
@@ -20547,8 +20532,7 @@ Yv4HAqGEVka+lgqaE9chTLd8B59OTj+RdPsnnRHM3eaxynFNExc5JsUpISuTKWqW
 #Certificate:
 #    Data:
 #        Version: 3 (0x2)
-#        Serial Number:
-#            8e:17:fe:24:20:81
+#        Serial Number: 156233699172481 (0x8e17fe242081)
 #    Signature Algorithm: sha256WithRSAEncryption
 #        Issuer: C=TR, L=Ankara, O=T\xC3\x9CRKTRUST Bilgi \xC4\xB0leti\xC5\x9Fim ve Bili\xC5\x9Fim G\xC3\xBCvenli\xC4\x9Fi Hizmetleri A.\xC5\x9E., CN=T\xC3\x9CRKTRUST Elektronik Sertifika Hizmet Sa\xC4\x9Flay\xC4\xB1c\xC4\xB1s\xC4\xB1 H5
 #        Validity
@@ -22406,8 +22390,7 @@ i/nDhDwTqn6Sm1dTk/pwwpEOMfmbZ13pljheX7NzTogVZ96edhBiIL5VaZVDADlN
 #Certificate:
 #    Data:
 #        Version: 3 (0x2)
-#        Serial Number:
-#            20:06:05:16:70:02
+#        Serial Number: 35210227249154 (0x200605167002)
 #    Signature Algorithm: sha1WithRSAEncryption
 #        Issuer: C=RO, O=certSIGN, OU=certSIGN ROOT CA
 #        Validity
