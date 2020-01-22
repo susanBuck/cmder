@@ -145,8 +145,10 @@ minimizes the risk of private key leakage when serious bug like
 Heartbleed is exploited.  The neverbleed is disabled by default.  To
 enable it, use ``--with-neverbleed`` configure option.
 
-In order to compile the source code, gcc >= 4.8.3 or clang >= 3.4 is
-required.
+Compiling libnghttp2 C source code requires a C99 compiler.  gcc 4.8
+is known to be adequate.  In order to compile the C++ source code, gcc
+>= 6.0 or clang >= 6.0 is required.  C++ source code requires C++14
+language features.
 
 .. note::
 
@@ -321,12 +323,7 @@ its testing framework.  We depend on the following libraries:
 * golang.org/x/net/websocket
 * https://github.com/tatsuhiro-t/go-nghttp2
 
-To download the above packages, after settings ``GOPATH``, run the
-following command under ``integration-tests`` directory:
-
-.. code-block:: text
-
-    $ make itprep
+Go modules will download these dependencies automatically.
 
 To run the tests, run the following command under
 ``integration-tests`` directory:
@@ -1332,7 +1329,7 @@ are:
 * Boost::Thread
 
 The server API is designed to build an HTTP/2 server very easily to utilize
-C++11 anonymous functions and closures.  The bare minimum example of
+C++14 anonymous functions and closures.  The bare minimum example of
 an HTTP/2 server looks like this:
 
 .. code-block:: cpp

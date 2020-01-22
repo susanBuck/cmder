@@ -1,7 +1,8 @@
 " Vim filetype plugin file
 " Language:	man
 " Maintainer:	SungHyun Nam <goweol@gmail.com>
-" Last Change: 	2018 May 2
+" Last Change: 	2019 Sep 26
+"		(fix by Jason Franklin)
 
 " To make the ":Man" command available before editing a manual page, source
 " this script from your startup vimrc file.
@@ -14,32 +15,47 @@ if &filetype == "man"
     finish
   endif
   let b:did_ftplugin = 1
+endif
 
+let s:cpo_save = &cpo
+set cpo-=C
+
+if &filetype == "man"
   " allow dot and dash in manual page name.
   setlocal iskeyword+=\.,-
+  let b:undo_ftplugin = "setlocal iskeyword<"
 
   " Add mappings, unless the user didn't want this.
   if !exists("no_plugin_maps") && !exists("no_man_maps")
     if !hasmapto('<Plug>ManBS')
       nmap <buffer> <LocalLeader>h <Plug>ManBS
+      let b:undo_ftplugin = b:undo_ftplugin
+	    \ . '|silent! nunmap <buffer> <LocalLeader>h'
     endif
     nnoremap <buffer> <Plug>ManBS :%s/.\b//g<CR>:setl nomod<CR>''
 
     nnoremap <buffer> <c-]> :call <SID>PreGetPage(v:count)<CR>
     nnoremap <buffer> <c-t> :call <SID>PopPage()<CR>
     nnoremap <buffer> <silent> q :q<CR>
+
+    " Add undo commands for the maps
+    let b:undo_ftplugin = b:undo_ftplugin
+	  \ . '|silent! nunmap <buffer> <Plug>ManBS'
+	  \ . '|silent! nunmap <buffer> <c-]>'
+	  \ . '|silent! nunmap <buffer> <c-t>'
+	  \ . '|silent! nunmap <buffer> q'
   endif
 
   if exists('g:ft_man_folding_enable') && (g:ft_man_folding_enable == 1)
     setlocal foldmethod=indent foldnestmax=1 foldenable
+    let b:undo_ftplugin = b:undo_ftplugin
+	  \ . '|silent! setl fdm< fdn< fen<'
   endif
-
-  let b:undo_ftplugin = "setlocal iskeyword<"
 
 endif
 
 if exists(":Man") != 2
-  com -nargs=+ -complete=shellcmd Man call s:GetPage(<f-args>)
+  com -nargs=+ -complete=shellcmd Man call s:GetPage(<q-mods>, <f-args>)
   nmap <Leader>K :call <SID>PreGetPage(0)<CR>
   nmap <Plug>ManPreGetPage :call <SID>PreGetPage(0)<CR>
 endif
@@ -100,7 +116,7 @@ func <SID>FindPage(sect, page)
   return 1
 endfunc
 
-func <SID>GetPage(...)
+func <SID>GetPage(cmdmods, ...)
   if a:0 >= 2
     let sect = a:1
     let page = a:2
@@ -116,17 +132,25 @@ func <SID>GetPage(...)
     let page = expand('<cword>')
   endif
 
-  if sect != "" && s:FindPage(sect, page) == 0
-    let sect = ""
+  if !exists('g:ft_man_no_sect_fallback') || (g:ft_man_no_sect_fallback == 0)
+    if sect != "" && s:FindPage(sect, page) == 0
+      let sect = ""
+    endif
   endif
   if s:FindPage(sect, page) == 0
-    echo "\nCannot find a '".page."'."
+    let msg = "\nNo manual entry for ".page
+    if sect != ""
+      let msg .= " in section ".sect
+    endif
+    echo msg
     return
   endif
   exec "let s:man_tag_buf_".s:man_tag_depth." = ".bufnr("%")
   exec "let s:man_tag_lin_".s:man_tag_depth." = ".line(".")
   exec "let s:man_tag_col_".s:man_tag_depth." = ".col(".")
   let s:man_tag_depth = s:man_tag_depth + 1
+
+  let open_cmd = 'edit'
 
   " Use an existing "man" window if it exists, otherwise open a new one.
   if &filetype != "man"
@@ -146,24 +170,25 @@ func <SID>GetPage(...)
     endif
     if &filetype != "man"
       if exists("g:ft_man_open_mode")
-        if g:ft_man_open_mode == "vert"
-          vnew
-        elseif g:ft_man_open_mode == "tab"
-          tabnew
+        if g:ft_man_open_mode == 'vert'
+	  let open_cmd = 'vsplit'
+        elseif g:ft_man_open_mode == 'tab'
+	  let open_cmd = 'tabedit'
         else
-          new
+	  let open_cmd = 'split'
         endif
       else
-        new
+	let open_cmd = a:cmdmods . ' split'
       endif
-      setl nonu fdc=0
     endif
   endif
-  silent exec "edit $HOME/".page.".".sect."~"
+
+  silent execute open_cmd . " $HOME/" . page . '.' . sect . '~'
+
   " Avoid warning for editing the dummy file twice
   setl buftype=nofile noswapfile
 
-  setl ma nonu nornu nofen
+  setl fdc=0 ma nofen nonu nornu
   silent exec "norm! 1GdG"
   let unsetwidth = 0
   if empty($MANWIDTH)
@@ -187,10 +212,10 @@ func <SID>GetPage(...)
     let $MANWIDTH = ''
   endif
   " Remove blank lines from top and bottom.
-  while getline(1) =~ '^\s*$'
+  while line('$') > 1 && getline(1) =~ '^\s*$'
     silent keepj norm! ggdd
   endwhile
-  while getline('$') =~ '^\s*$'
+  while line('$') > 1 && getline('$') =~ '^\s*$'
     silent keepj norm! Gdd
   endwhile
   1
@@ -217,5 +242,8 @@ func <SID>PopPage()
 endfunc
 
 endif
+
+let &cpo = s:cpo_save
+unlet s:cpo_save
 
 " vim: set sw=2 ts=8 noet:

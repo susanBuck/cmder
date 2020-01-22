@@ -11,8 +11,9 @@
 #
 #  zstyle ':completion:*:*:git:*' script ~/.git-completion.zsh
 #
-# The recommended way to install this script is to copy to '~/.zsh/_git', and
-# then add the following to your ~/.zshrc file:
+# The recommended way to install this script is to make a copy of it in
+# ~/.zsh/ directory as ~/.zsh/git-completion.zsh and then add the following
+# to your ~/.zshrc file:
 #
 #  fpath=(~/.zsh $fpath)
 
@@ -99,7 +100,7 @@ __gitcomp_file_direct ()
 
 	local IFS=$'\n'
 	compset -P '*[=:]'
-	compadd -Q -f -- ${=1} && _ret=0
+	compadd -f -- ${=1} && _ret=0
 }
 
 __gitcomp_file ()
@@ -108,7 +109,7 @@ __gitcomp_file ()
 
 	local IFS=$'\n'
 	compset -P '*[=:]'
-	compadd -Q -p "${2-}" -f -- ${=1} && _ret=0
+	compadd -p "${2-}" -f -- ${=1} && _ret=0
 }
 
 __git_zsh_bash_func ()

@@ -1,7 +1,7 @@
 " Vim indent file
 " Language:	Vim script
 " Maintainer:	Bram Moolenaar <Bram@vim.org>
-" Last Change:	2016 Jun 27
+" Last Change:	2019 Oct 31
 
 " Only load this indent file when no other was loaded.
 if exists("b:did_indent")
@@ -10,7 +10,7 @@ endif
 let b:did_indent = 1
 
 setlocal indentexpr=GetVimIndent()
-setlocal indentkeys+==end,=else,=cat,=fina,=END,0\\
+setlocal indentkeys+==end,=else,=cat,=fina,=END,0\\,0=\"\\\ 
 
 let b:undo_indent = "setl indentkeys< indentexpr<"
 
@@ -31,15 +31,17 @@ function GetVimIndent()
   endtry
 endfunc
 
+let s:lineContPat = '^\s*\(\\\|"\\ \)'
+
 function GetVimIndentIntern()
   " Find a non-blank line above the current line.
   let lnum = prevnonblank(v:lnum - 1)
 
-  " If the current line doesn't start with '\' and below a line that starts
-  " with '\', use the indent of the line above it.
+  " If the current line doesn't start with '\' or '"\ ' and below a line that
+  " starts with '\' or '"\ ', use the indent of the line above it.
   let cur_text = getline(v:lnum)
-  if cur_text !~ '^\s*\\'
-    while lnum > 0 && getline(lnum) =~ '^\s*\\'
+  if cur_text !~ s:lineContPat
+    while lnum > 0 && getline(lnum) =~ s:lineContPat
       let lnum = lnum - 1
     endwhile
   endif
@@ -51,10 +53,35 @@ function GetVimIndentIntern()
   let prev_text = getline(lnum)
 
   " Add a 'shiftwidth' after :if, :while, :try, :catch, :finally, :function
-  " and :else.  Add it three times for a line that starts with '\' after
-  " a line that doesn't (or g:vim_indent_cont if it exists).
+  " and :else.  Add it three times for a line that starts with '\' or '"\ '
+  " after a line that doesn't (or g:vim_indent_cont if it exists).
   let ind = indent(lnum)
-  if cur_text =~ '^\s*\\' && v:lnum > 1 && prev_text !~ '^\s*\\'
+
+  " In heredoc indenting works completely differently.
+  if has('syntax_items') 
+    let syn_here = synIDattr(synID(v:lnum, 1, 1), "name")
+    if syn_here =~ 'vimLetHereDocStop'
+      " End of heredoc: use indent of matching start line
+      let lnum = v:lnum - 1
+      while lnum > 0
+	if synIDattr(synID(lnum, 1, 1), "name") !~ 'vimLetHereDoc'
+	  return indent(lnum)
+	endif
+	let lnum -= 1
+      endwhile
+      return 0
+    endif
+    if syn_here =~ 'vimLetHereDoc'
+      if synIDattr(synID(lnum, 1, 1), "name") !~ 'vimLetHereDoc'
+	" First line in heredoc: increase indent
+	return ind + shiftwidth()
+      endif
+      " Heredoc continues: no change in indent
+      return ind
+    endif
+  endif
+
+  if cur_text =~ s:lineContPat && v:lnum > 1 && prev_text !~ s:lineContPat
     if exists("g:vim_indent_cont")
       let ind = ind + g:vim_indent_cont
     else

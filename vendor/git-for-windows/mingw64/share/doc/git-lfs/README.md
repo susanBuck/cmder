@@ -1,15 +1,8 @@
 # Git Large File Storage
 
-| Linux | macOS | Windows |
-| :---- | :------ | :---- |
-[ ![Linux build status][1]][2] | [![macOS build status][3]][4] | [![Windows build status][5]][6] |
+![CI status][1]
 
-[1]: https://travis-ci.org/git-lfs/git-lfs.svg?branch=master
-[2]: https://travis-ci.org/git-lfs/git-lfs
-[3]: https://circleci.com/gh/git-lfs/git-lfs.svg?style=shield&circle-token=856152c2b02bfd236f54d21e1f581f3e4ebf47ad
-[4]: https://circleci.com/gh/git-lfs/git-lfs
-[5]: https://ci.appveyor.com/api/projects/status/46a5yoqc3hk59bl5/branch/master?svg=true
-[6]: https://ci.appveyor.com/project/git-lfs/git-lfs/branch/master
+[1]: https://github.com/git-lfs/git-lfs/workflows/CI/badge.svg
 
 [Git LFS](https://git-lfs.github.com) is a command line extension and
 [specification](docs/spec.md) for managing large files with Git.
@@ -20,7 +13,7 @@ for an overview of features.
 
 ## Getting Started
 
-### Installation
+### Downloading
 
 You can install the Git LFS client in several different ways, depending on your
 setup and preferences.
@@ -29,28 +22,45 @@ setup and preferences.
   [PackageCloud](https://packagecloud.io/github/git-lfs/install).
 * **macOS users**. [Homebrew](https://brew.sh) bottles are distributed, and can
   be installed via `brew install git-lfs`.
-* **Windows users**. Git LFS is included in the distribution of 
-  [Git for Windows](https://gitforwindows.org/). Alternatively, you can 
-  install a recent version of Git LFS from the Chocolatey package manager.
-
-In addition, [binary packages](https://github.com/git-lfs/git-lfs/releases) are
-available for Linux, macOS, Windows, and FreeBSD. This repository can also be
+* **Windows users**. Git LFS is included in the distribution of
+  [Git for Windows](https://gitforwindows.org/). Alternatively, you can
+  install a recent version of Git LFS from the [Chocolatey](https://chocolatey.org/) package manager.
+* **Binary packages**. In addition, [binary packages](https://github.com/git-lfs/git-lfs/releases) are
+available for Linux, macOS, Windows, and FreeBSD.
+* **Building from source**. [This repository](https://github.com/git-lfs/git-lfs.git) can also be
 built from source using the latest version of [Go](https://golang.org), and the
 available instructions in our
 [Wiki](https://github.com/git-lfs/git-lfs/wiki/Installation#source).
 
-### Usage
+### Installing
 
-Git LFS requires a global installation once per-machine. This can be done by
+#### From binary
+
+The [binary packages](https://github.com/git-lfs/git-lfs/releases) include a script which will:
+
+- Install Git LFS binaries onto the system `$PATH`
+- Run `git lfs install` to
+perform required global configuration changes.
+
+```ShellSession
+$ ./install.sh
+```
+
+#### From source
+
+- Place the `git-lfs` binary on your system’s executable `$PATH` or equivalent.
+- Git LFS requires global configuration changes once per-machine. This can be done by
 running:
 
-```bash
+```ShellSession
 $ git lfs install
 ```
 
-To begin using Git LFS within your Git repository, you can indicate which files
-you would like Git LFS to manage. This can be done by running the following
-_from within Git repository_:
+## Example Usage
+
+To begin using Git LFS within a Git repository that is not already configured
+for Git LFS, you can indicate which files you would like Git LFS to manage.
+This can be done by running the following _from within a Git repository_:
 
 ```bash
 $ git lfs track "*.psd"
@@ -59,6 +69,9 @@ $ git lfs track "*.psd"
 (Where `*.psd` is the pattern of filenames that you wish to track. You can read
 more about this pattern syntax
 [here](https://git-scm.com/docs/gitattributes)).
+
+> *Note:* the quotation marks surrounding the pattern are important to
+> prevent the glob pattern from being expanded by the shell.
 
 After any invocation of `git-lfs-track(1)` or `git-lfs-untrack(1)`, you _must
 commit changes to your `.gitattributes` file_. This can be done by running:
@@ -104,7 +117,7 @@ To https://github.com/git-lfs/git-lfs-test
    67fcf6a..47b2002  master -> master
 ```
 
-Note: Git LFS requires Git v1.8.5 or higher.
+Note: Git LFS requires at least Git 1.8.2 on Linux or 1.8.5 on macOS.
 
 ## Limitations
 
@@ -142,14 +155,16 @@ These are the humans that form the Git LFS core team, which runs the project.
 
 In alphabetical order:
 
-| [@larsxschneider][larsxschneider-user] | [@ttaylorr][ttaylorr-user] |
-|---|---|
-| [![][larsxschneider-img]][larsxschneider-user] | [![][ttaylorr-img]][ttaylorr-user] |
+| [@bk2204][bk2204-user] | [@larsxschneider][larsxschneider-user] | [@PastelMobileSuit][PastelMobileSuit-user] |
+|---|---|---|
+| [![][bk2204-img]][bk2204-user] | [![][larsxschneider-img]][larsxschneider-user] | [![][PastelMobileSuit-img]][PastelMobileSuit-user] |
 
+[bk2204-img]: https://avatars1.githubusercontent.com/u/497054?s=100&v=4
 [larsxschneider-img]: https://avatars1.githubusercontent.com/u/477434?s=100&v=4
-[ttaylorr-img]: https://avatars2.githubusercontent.com/u/443245?s=100&v=4
+[PastelMobileSuit-img]: https://avatars2.githubusercontent.com/u/37254014?s=100&v=4
+[bk2204-user]: https://github.com/bk2204
 [larsxschneider-user]: https://github.com/larsxschneider
-[ttaylorr-user]: https://github.com/ttaylorr
+[PastelMobileSuit-user]: https://github.com/PastelMobileSuit
 
 ### Alumni
 
@@ -159,15 +174,17 @@ not be possible without them.
 
 In alphabetical order:
 
-| [@andyneff][andyneff-user] | [@rubyist][rubyist-user] | [@sinbad][sinbad-user] | [@technoweenie][technoweenie-user] |
-|---|---|---|---|
-| [![][andyneff-img]][andyneff-user] | [![][rubyist-img]][rubyist-user] | [![][sinbad-img]][sinbad-user] | [![][technoweenie-img]][technoweenie-user] |
+| [@andyneff][andyneff-user] | [@rubyist][rubyist-user] | [@sinbad][sinbad-user] | [@technoweenie][technoweenie-user] | [@ttaylorr][ttaylorr-user] |
+|---|---|---|---|---|
+| [![][andyneff-img]][andyneff-user] | [![][rubyist-img]][rubyist-user] | [![][sinbad-img]][sinbad-user] | [![][technoweenie-img]][technoweenie-user] | [![][ttaylorr-img]][ttaylorr-user] |
 
 [andyneff-img]: https://avatars1.githubusercontent.com/u/7596961?v=3&s=100
 [rubyist-img]: https://avatars1.githubusercontent.com/u/143?v=3&s=100
 [sinbad-img]: https://avatars1.githubusercontent.com/u/142735?v=3&s=100
 [technoweenie-img]: https://avatars3.githubusercontent.com/u/21?v=3&s=100
+[ttaylorr-img]: https://avatars2.githubusercontent.com/u/443245?s=100&v=4
 [andyneff-user]: https://github.com/andyneff
 [sinbad-user]: https://github.com/sinbad
 [rubyist-user]: https://github.com/rubyist
 [technoweenie-user]: https://github.com/technoweenie
+[ttaylorr-user]: https://github.com/ttaylorr

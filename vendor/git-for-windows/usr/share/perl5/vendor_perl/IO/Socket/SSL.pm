@@ -13,7 +13,7 @@
 
 package IO::Socket::SSL;
 
-our $VERSION = '2.056';
+our $VERSION = '2.066';
 
 use IO::Socket;
 use Net::SSLeay 1.46;
@@ -61,43 +61,77 @@ use constant SSL_OCSP_TRY_STAPLE  => 0b10000;
 # capabilities of underlying Net::SSLeay/openssl
 my $can_client_sni;  # do we support SNI on the client side
 my $can_server_sni;  # do we support SNI on the server side
+my $can_multi_cert;  # RSA and ECC certificate in same context
 my $can_npn;         # do we support NPN (obsolete)
 my $can_alpn;        # do we support ALPN
 my $can_ecdh;        # do we support ECDH key exchange
+my $set_groups_list; # SSL_CTX_set1_groups_list || SSL_CTX_set1_curves_list || undef
 my $can_ocsp;        # do we support OCSP
 my $can_ocsp_staple; # do we support OCSP stapling
 my $can_tckt_keycb;  # TLS ticket key callback
+my $can_pha;         # do we support PHA
+my $session_upref;   # SSL_SESSION_up_ref is implemented
+my %sess_cb;         # SSL_CTX_sess_set_(new|remove)_cb
+my $check_partial_chain; # use X509_V_FLAG_PARTIAL_CHAIN if available
+
+my $openssl_version;
+my $netssleay_version;
+
 BEGIN {
-    $can_client_sni = Net::SSLeay::OPENSSL_VERSION_NUMBER() >= 0x01000000;
+    $openssl_version = Net::SSLeay::OPENSSL_VERSION_NUMBER();
+    $netssleay_version = do { no warnings; $Net::SSLeay::VERSION + 0.0; };
+    $can_client_sni = $openssl_version >= 0x10000000;
     $can_server_sni = defined &Net::SSLeay::get_servername;
-    if ($can_npn = defined &Net::SSLeay::P_next_proto_negotiated and
-	Net::SSLeay::SSLeay_version(0) =~m{^LibreSSL\s+(\d+)\.(\d+)\.(\d+)}) {
+    $can_npn = defined &Net::SSLeay::P_next_proto_negotiated &&
+	! Net::SSLeay::constant("LIBRESSL_VERSION_NUMBER");
 	# LibreSSL 2.6.1 disabled NPN by keeping the relevant functions
-	# available but remove the actual functionality from these functions. It
-	# does not set OPENSSL_NO_NEXTPROTONEG as OpenSSL does in case NPN is
-	# not supported, which means one need to rely on checking the LibreSSL
-	# version instead.
-	$can_npn =
-	    $1 < 2 ? $can_npn :       # version 1.x.y
-	    $1 > 2 ? 0 :              # version 3.x.y
-	    $2 < 6 ? $can_npn :       # version 2.5.y and lower
-	    $2 > 6 ? 0 :              # version 2.7.y and higher
-	    $3 == 0 ? $can_npn :      # version 2.6.0
-	    0;                        # version 2.6.1 and higher
-    }
-    $can_alpn       = defined &Net::SSLeay::CTX_set_alpn_protos;
-    $can_ecdh       = defined &Net::SSLeay::CTX_set_tmp_ecdh &&
-	# There is a regression with elliptic curves on 1.0.1d with 64bit
-	# http://rt.openssl.org/Ticket/Display.html?id=2975
-	( Net::SSLeay::OPENSSL_VERSION_NUMBER() != 0x1000104f
-	|| length(pack("P",0)) == 4 );
-    $can_ocsp        = defined &Net::SSLeay::OCSP_cert2ids
+	# available but removed the actual functionality from these functions.
+    $can_alpn = defined &Net::SSLeay::CTX_set_alpn_protos;
+    $can_ecdh =
+	($openssl_version >= 0x1010000f) ? 'auto' :
+	defined(&Net::SSLeay::CTX_set_ecdh_auto) ? 'can_auto' :
+	(defined &Net::SSLeay::CTX_set_tmp_ecdh &&
+	    # There is a regression with elliptic curves on 1.0.1d with 64bit
+	    # http://rt.openssl.org/Ticket/Display.html?id=2975
+	    ( $openssl_version != 0x1000104f
+	    || length(pack("P",0)) == 4 )) ? 'tmp_ecdh' :
+	    '';
+    $set_groups_list =
+	defined &Net::SSLeay::CTX_set1_groups_list ? \&Net::SSLeay::CTX_set1_groups_list :
+	defined &Net::SSLeay::CTX_set1_curves_list ? \&Net::SSLeay::CTX_set1_curves_list :
+	undef;
+    $can_multi_cert = $can_ecdh
+	&& $openssl_version >= 0x10002000;
+    $can_ocsp = defined &Net::SSLeay::OCSP_cert2ids
 	# OCSP got broken in 1.75..1.77
-	&& ($Net::SSLeay::VERSION < 1.75 || $Net::SSLeay::VERSION > 1.77);
+	&& ($netssleay_version < 1.75 || $netssleay_version > 1.77);
     $can_ocsp_staple = $can_ocsp
 	&& defined &Net::SSLeay::set_tlsext_status_type;
     $can_tckt_keycb  = defined &Net::SSLeay::CTX_set_tlsext_ticket_getkey_cb
-	&& $Net::SSLeay::VERSION >= 1.80;  
+	&& $netssleay_version >= 1.80;  
+    $can_pha = defined &Net::SSLeay::CTX_set_post_handshake_auth;
+
+    if (defined &Net::SSLeay::SESSION_up_ref) {
+	$session_upref = 1;
+    }
+
+    if ($session_upref
+	&& defined &Net::SSLeay::CTX_sess_set_new_cb
+	&& defined &Net::SSLeay::CTX_sess_set_remove_cb) {
+	%sess_cb = (
+	    new => \&Net::SSLeay::CTX_sess_set_new_cb,
+	    remove => \&Net::SSLeay::CTX_sess_set_remove_cb,
+	);
+    }
+
+    if (my $c = defined &Net::SSLeay::CTX_get0_param
+	&& eval { Net::SSLeay::X509_V_FLAG_PARTIAL_CHAIN() }) {
+	$check_partial_chain = sub {
+	    my $ctx = shift;
+	    my $param = Net::SSLeay::CTX_get0_param($ctx);
+	    Net::SSLeay::X509_VERIFY_PARAM_set_flags($param, $c);
+	};
+    }
 }
 
 my $algo2digest = do {
@@ -112,6 +146,20 @@ my $algo2digest = do {
     }
 };
 
+my $CTX_tlsv1_3_new;
+if ( defined &Net::SSLeay::CTX_set_min_proto_version
+    and defined &Net::SSLeay::CTX_set_max_proto_version
+    and my $tls13 = eval { Net::SSLeay::TLS1_3_VERSION() }
+) {
+    $CTX_tlsv1_3_new = sub {
+	my $ctx = Net::SSLeay::CTX_new();
+	return $ctx if Net::SSLeay::CTX_set_min_proto_version($ctx,$tls13)
+	    && Net::SSLeay::CTX_set_max_proto_version($ctx,$tls13);
+	Net::SSLeay::CTX_free($ctx);
+	return;
+    };
+}
+
 
 # global defaults
 my %DEFAULT_SSL_ARGS = (
@@ -124,10 +172,11 @@ my %DEFAULT_SSL_ARGS = (
     SSL_npn_protocols => undef,    # meaning depends whether on server or client side
     SSL_alpn_protocols => undef,   # list of protocols we'll accept/send, for example ['http/1.1','spdy/3.1']
 
-    # https://wiki.mozilla.org/Security/Server_Side_TLS, 2016/04/20
+    # https://wiki.mozilla.org/Security/Server_Side_TLS, 2019/03/05
     # "Old backward compatibility" for best compatibility
     # .. "Most ciphers that are not clearly broken and dangerous to use are supported"
-    SSL_cipher_list => 'ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:DHE-DSS-AES128-GCM-SHA256:kEDH+AESGCM:ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA:ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA:ECDHE-ECDSA-AES256-SHA:DHE-RSA-AES128-SHA256:DHE-RSA-AES128-SHA:DHE-DSS-AES128-SHA256:DHE-RSA-AES256-SHA256:DHE-DSS-AES256-SHA:DHE-RSA-AES256-SHA:ECDHE-RSA-DES-CBC3-SHA:ECDHE-ECDSA-DES-CBC3-SHA:EDH-RSA-DES-CBC3-SHA:AES128-GCM-SHA256:AES256-GCM-SHA384:AES128-SHA256:AES256-SHA256:AES128-SHA:AES256-SHA:AES:DES-CBC3-SHA:HIGH:SEED:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!MD5:!PSK:!RSAPSK:!aDH:!aECDH:!EDH-DSS-DES-CBC3-SHA:!KRB5-DES-CBC3-SHA:!SRP',
+    # slightly reordered to prefer AES since it is cheaper when hardware accelerated
+    SSL_cipher_list => 'ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-DSS-AES128-GCM-SHA256:kEDH+AESGCM:ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA:ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA:ECDHE-ECDSA-AES256-SHA:DHE-RSA-AES128-SHA256:DHE-RSA-AES128-SHA:DHE-DSS-AES128-SHA256:DHE-RSA-AES256-SHA256:DHE-DSS-AES256-SHA:DHE-RSA-AES256-SHA:ECDHE-RSA-DES-CBC3-SHA:ECDHE-ECDSA-DES-CBC3-SHA:EDH-RSA-DES-CBC3-SHA:AES128-GCM-SHA256:AES256-GCM-SHA384:AES128-SHA256:AES256-SHA256:AES128-SHA:AES256-SHA:AES:DES-CBC3-SHA:HIGH:SEED:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!MD5:!PSK:!RSAPSK:!aDH:!aECDH:!EDH-DSS-DES-CBC3-SHA:!KRB5-DES-CBC3-SHA:!SRP',
 );
 
 my %DEFAULT_SSL_CLIENT_ARGS = (
@@ -235,7 +284,12 @@ DH
 		$dh or die "no DH";
 		$dh;
 	    },
-	    $can_ecdh ? ( SSL_ecdh_curve => 'prime256v1' ):(),
+	    (
+		$can_ecdh eq 'auto' ? () : # automatically enabled by openssl
+		$can_ecdh eq 'can_auto' ? (SSL_ecdh_curve => 'auto') :
+		$can_ecdh eq 'tmp_ecdh' ? ( SSL_ecdh_curve => 'prime256v1' ) :
+		(),
+	    )
 	);
     }
     # Call it once at compile time and try it at INIT.
@@ -268,7 +322,8 @@ BEGIN{
 # get constants for SSL_OP_NO_* now, instead calling the related functions
 # every time we setup a connection
 my %SSL_OP_NO;
-for(qw( SSLv2 SSLv3 TLSv1 TLSv1_1 TLSv11:TLSv1_1 TLSv1_2 TLSv12:TLSv1_2 )) {
+for(qw( SSLv2 SSLv3 TLSv1 TLSv1_1 TLSv11:TLSv1_1 TLSv1_2 TLSv12:TLSv1_2
+        TLSv1_3 TLSv13:TLSv1_3 )) {
     my ($k,$op) = m{:} ? split(m{:},$_,2) : ($_,$_);
     my $sub = "Net::SSLeay::OP_NO_$op";
     local $SIG{__DIE__};
@@ -335,19 +390,19 @@ BEGIN {
 	    return if $err;
 	    return ($host,$port);
 	};
-	1;
+	'Socket';
     } || eval {
 	require Socket6;
 	Socket6::inet_pton( AF_INET6(),'::1') && AF_INET6() or die;
 	Socket6->import( qw/inet_pton NI_NUMERICHOST NI_NUMERICSERV/ );
 	# behavior different to Socket::getnameinfo - wrap
 	*_getnameinfo = sub { return Socket6::getnameinfo(@_); };
-	1;
-    };
+	'Socket6';
+    } || undef;
 
     # try IO::Socket::IP or IO::Socket::INET6 for IPv6 support
     $family_key = 'Domain'; # traditional
-    if ( $ip6 ) {
+    if ($ip6) {
 	# if we have IO::Socket::IP >= 0.31 we will use this in preference
 	# because it can handle both IPv4 and IPv6
 	if ( eval { 
@@ -367,17 +422,19 @@ BEGIN {
 	    constant->import( CAN_IPV6 => "IO::Socket::INET6" );
 	    $IOCLASS = "IO::Socket::INET6";
 	} else {
-	    $ip6 = 0;
+	    $ip6 = ''
 	}
     }
 
     # fall back to IO::Socket::INET for IPv4 only
-    if ( ! $ip6 ) {
+    if (!$ip6) {
 	@ISA = qw(IO::Socket::INET);
 	$IOCLASS = "IO::Socket::INET";
 	constant->import(CAN_IPV6 => '');
-	constant->import(NI_NUMERICHOST => 1);
-	constant->import(NI_NUMERICSERV => 2);
+	if (!defined $ip6) {
+	    constant->import(NI_NUMERICHOST => 1);
+	    constant->import(NI_NUMERICSERV => 2);
+	}
     }
 
     #Make $DEBUG another name for $Net::SSLeay::trace
@@ -712,6 +769,15 @@ sub connect_SSL {
 	$SSL_OBJECT{$ssl} = [$self,0];
 	weaken($SSL_OBJECT{$ssl}[0]);
 
+	if ($ctx->{session_cache}) {
+	    $arg_hash->{SSL_session_key} ||= do {
+		my $host = $arg_hash->{PeerAddr} || $arg_hash->{PeerHost}
+		    || $self->_update_peer;
+		my $port = $arg_hash->{PeerPort} || $arg_hash->{PeerService};
+		$port ? "$host:$port" : $host;
+	    }
+	}
+
 	Net::SSLeay::set_fd($ssl, $fileno)
 	    || return $self->error("SSL filehandle association failed");
 
@@ -768,14 +834,9 @@ sub connect_SSL {
 	    $DEBUG>=2 && DEBUG("request OCSP stapling");
 	}
 
-	if ($ctx->{session_cache}
-	    and my $session = $ctx->{session_cache}->get_session(
-		$arg_hash->{SSL_session_key} || do {
-		    my $host = $arg_hash->{PeerAddr} || $arg_hash->{PeerHost};
-		    my $port = $arg_hash->{PeerPort} || $arg_hash->{PeerService};
-		    $port ? "$host:$port" : $host;
-		}
-	    )) {
+	if ($ctx->{session_cache} and my $session =
+	    $ctx->{session_cache}->get_session($arg_hash->{SSL_session_key})
+	) {
 	    Net::SSLeay::set_session($ssl, $session);
 	}
     }
@@ -891,16 +952,10 @@ sub connect_SSL {
 	return $self->fatal_ssl_error();
     }
 
-    if ( $ctx->{session_cache}
+    if (!%sess_cb and $ctx->{session_cache}
 	and my $session = Net::SSLeay::get1_session($ssl)) {
-	my $arg_hash = ${*$self}{'_SSL_arguments'};
 	$ctx->{session_cache}->add_session(
-	    $arg_hash->{SSL_session_key} || do {
-		my $host = $arg_hash->{PeerAddr} || $arg_hash->{PeerHost}
-		    || $self->_update_peer;
-		my $port = $arg_hash->{PeerPort} || $arg_hash->{PeerService};
-		$port ? "$host:$port" : $host;
-	    },
+	    ${*$self}{_SSL_arguments}{SSL_session_key},
 	    $session
 	);
     }
@@ -1427,11 +1482,13 @@ sub stop_SSL {
 	# destroy allocated objects for SSL and untie
 	# do not destroy CTX unless explicitly specified
 	Net::SSLeay::free($ssl);
-	delete ${*$self}{_SSL_object};
 	if (my $cert = delete ${*$self}{'_SSL_certificate'}) {
 	    Net::SSLeay::X509_free($cert);
 	}
+	delete ${*$self}{_SSL_object};
 	${*$self}{'_SSL_opened'} = 0;
+	delete $SSL_OBJECT{$ssl};
+	delete $CREATED_IN_THIS_THREAD{$ssl};
 	untie(*$self);
     }
 
@@ -1565,7 +1622,7 @@ sub dump_peer_certificate {
 }
 
 if ( defined &Net::SSLeay::get_peer_cert_chain
-    && $Net::SSLeay::VERSION >= 1.58 ) {
+    && $netssleay_version >= 1.58 ) {
     *peer_certificates = sub {
 	my $self = shift;
 	my $ssl = $self->_get_ssl_object || return;
@@ -1889,6 +1946,7 @@ sub get_sslversion {
     my $ssl = shift()->_get_ssl_object || return;
     my $version = Net::SSLeay::version($ssl) or return;
     return
+	$version == 0x0304 ? 'TLSv1_3' :
 	$version == 0x0303 ? 'TLSv1_2' :
 	$version == 0x0302 ? 'TLSv1_1' :
 	$version == 0x0301 ? 'TLSv1'   :
@@ -1901,6 +1959,11 @@ sub get_sslversion {
 sub get_sslversion_int {
     my $ssl = shift()->_get_ssl_object || return;
     return Net::SSLeay::version($ssl);
+}
+
+sub get_session_reused {
+    return Net::SSLeay::session_reused(
+	shift()->_get_ssl_object || return);
 }
 
 if ($can_ocsp) {
@@ -1998,20 +2061,24 @@ sub error {
 
 sub can_client_sni { return $can_client_sni }
 sub can_server_sni { return $can_server_sni }
+sub can_multi_cert { return $can_multi_cert }
 sub can_npn        { return $can_npn }
 sub can_alpn       { return $can_alpn }
 sub can_ecdh       { return $can_ecdh }
 sub can_ipv6       { return CAN_IPV6 }
 sub can_ocsp       { return $can_ocsp }
 sub can_ticket_keycb { return $can_tckt_keycb }
+sub can_pha        { return $can_pha }
+sub can_partial_chain { return $check_partial_chain && 1 }
 
 sub DESTROY {
     my $self = shift or return;
-    my $ssl = ${*$self}{_SSL_object} or return;
-    delete $SSL_OBJECT{$ssl};
-    if (!$use_threads or delete $CREATED_IN_THIS_THREAD{$ssl}) {
-	$self->close(_SSL_in_DESTROY => 1, SSL_no_shutdown => 1)
-	    if ${*$self}{'_SSL_opened'};
+    if (my $ssl = ${*$self}{_SSL_object}) {
+	delete $SSL_OBJECT{$ssl};
+	if (!$use_threads or delete $CREATED_IN_THIS_THREAD{$ssl}) {
+	    $self->close(_SSL_in_DESTROY => 1, SSL_no_shutdown => 1)
+		if ${*$self}{'_SSL_opened'};
+	}
     }
     delete @{*$self}{@all_my_keys};
 }
@@ -2328,7 +2395,7 @@ sub new {
 
     my $ver;
     for (split(/\s*:\s*/,$arg_hash->{SSL_version})) {
-	m{^(!?)(?:(SSL(?:v2|v3|v23|v2/3))|(TLSv1(?:_?[12])?))$}i
+	m{^(!?)(?:(SSL(?:v2|v3|v23|v2/3))|(TLSv1(?:_?[123])?))$}i
 	or croak("invalid SSL_version specified");
 	my $not = $1;
 	( my $v = lc($2||$3) ) =~s{^(...)}{\U$1};
@@ -2343,14 +2410,17 @@ sub new {
 	}
     }
 
-    my $ctx_new_sub =  UNIVERSAL::can( 'Net::SSLeay',
-	$ver eq 'SSLv2'   ? 'CTX_v2_new' :
-	$ver eq 'SSLv3'   ? 'CTX_v3_new' :
-	$ver eq 'TLSv1'   ? 'CTX_tlsv1_new' :
-	$ver eq 'TLSv1_1' ? 'CTX_tlsv1_1_new' :
-	$ver eq 'TLSv1_2' ? 'CTX_tlsv1_2_new' :
-	'CTX_new'
-    ) or return IO::Socket::SSL->_internal_error("SSL Version $ver not supported",9);
+    my $ctx_new_sub =
+	$ver eq 'TLSv1_3' ? $CTX_tlsv1_3_new :
+	UNIVERSAL::can( 'Net::SSLeay',
+	    $ver eq 'SSLv2'   ? 'CTX_v2_new' :
+	    $ver eq 'SSLv3'   ? 'CTX_v3_new' :
+	    $ver eq 'TLSv1'   ? 'CTX_tlsv1_new' :
+	    $ver eq 'TLSv1_1' ? 'CTX_tlsv1_1_new' :
+	    $ver eq 'TLSv1_2' ? 'CTX_tlsv1_2_new' :
+	    'CTX_new'
+	)
+	or return IO::Socket::SSL->_internal_error("SSL Version $ver not supported",9);
 
     # For SNI in server mode we need a separate context for each certificate.
     my %ctx;
@@ -2365,16 +2435,32 @@ sub new {
 	    }
 	}
 	while (my ($host,$v) = each %sni) {
-	    $ctx{$host} = { %$arg_hash, %$v };
+	    $ctx{$host} = $host =~m{%} ? $v : { %$arg_hash, %$v };
 	}
     }
     $ctx{''} = $arg_hash if ! %ctx;
 
-    while (my ($host,$arg_hash) = each %ctx) {
-	# replace value in %ctx with real context
-	my $ctx = $ctx_new_sub->() or return
+    for my $host (sort keys %ctx) {
+	my $arg_hash = delete $ctx{$host};
+	my $ctx;
+	if ($host =~m{^([^%]*)%}) {
+	    $ctx = $ctx{$1} or return IO::Socket::SSL->error(
+		"SSL Context init for $host failed - no config for $1");
+	    if (my @k = grep { !m{^SSL_(?:cert|key)(?:_file)?$} }
+		keys %$arg_hash) {
+		return IO::Socket::SSL->error(
+		    "invalid keys @k in configuration '$host' of additional certs");
+	    }
+	    $can_multi_cert or return IO::Socket::SSL->error(
+		"no support for both RSA and ECC certificate in same context");
+	    $host = $1;
+	    goto just_configure_certs;
+	}
+
+	$ctx = $ctx_new_sub->() or return
 	    IO::Socket::SSL->error("SSL Context init failed");
 	$CTX_CREATED_IN_THIS_THREAD{$ctx} = 1 if $use_threads;
+	$ctx{$host} = $ctx; # replace value in %ctx with real context
 
 	# SSL_OP_CIPHER_SERVER_PREFERENCE
 	$ssl_op |= 0x00400000 if $arg_hash->{SSL_honor_cipher_order};
@@ -2387,6 +2473,9 @@ sub new {
 	}
 
 	Net::SSLeay::CTX_set_options($ctx,$ssl_op);
+
+	# enable X509_V_FLAG_PARTIAL_CHAIN if possible (OpenSSL 1.1.0+)
+	$check_partial_chain && $check_partial_chain->($ctx);
 
 	# if we don't set session_id_context if client certificate is expected
 	# client session caching will fail
@@ -2497,6 +2586,7 @@ sub new {
 		Net::SSLeay::BIO_free($bio);
 		if ( $crl ) {
 		    Net::SSLeay::X509_STORE_add_crl(Net::SSLeay::CTX_get_cert_store($ctx), $crl);
+		    Net::SSLeay::X509_CRL_free($crl);
 		} else {
 		    return IO::Socket::SSL->error("Invalid certificate revocation list");
 		}
@@ -2511,6 +2601,7 @@ sub new {
 	Net::SSLeay::CTX_set_default_passwd_cb($ctx,$arg_hash->{SSL_passwd_cb})
 	    if $arg_hash->{SSL_passwd_cb};
 
+	just_configure_certs:
 	my ($havekey,$havecert);
 	if ( my $x509 = $arg_hash->{SSL_cert} ) {
 	    # binary, e.g. X509*
@@ -2583,11 +2674,11 @@ sub new {
 		"Failed to load key from file (no PEM or DER)");
 	}
 
-	# replace arg_hash with created context
-	$ctx{$host} = $ctx;
+        Net::SSLeay::CTX_set_post_handshake_auth($ctx,1)
+            if (!$is_server && $can_pha && $havecert && $havekey);
     }
 
-    if ($arg_hash->{'SSL_server'} || $arg_hash->{'SSL_use_cert'}) {
+    if ($arg_hash->{SSL_server}) {
 
 	if ( my $f = $arg_hash->{SSL_dh_file} ) {
 	    my $bio = Net::SSLeay::BIO_new_file( $f,'r' )
@@ -2609,26 +2700,52 @@ sub new {
 		    IO::Socket::SSL->error( "Failed to set DH from SSL_dh" );
 	    }
 	}
+    }
 
-	if ( my $curve = $arg_hash->{SSL_ecdh_curve} ) {
-	    return IO::Socket::SSL->_internal_error(
-		"ECDH curve needs Net::SSLeay>=1.56 and OpenSSL>=1.0",9)
-		if ! $can_ecdh;
-	    if ( $curve !~ /^\d+$/ ) {
-		# name of curve, find NID
-		$curve = Net::SSLeay::OBJ_txt2nid($curve)
-		    || return IO::Socket::SSL->error(
-		    "cannot find NID for curve name '$curve'");
-	    }
-	    my $ecdh = Net::SSLeay::EC_KEY_new_by_curve_name($curve) or
-		return IO::Socket::SSL->error(
-		"cannot create curve for NID $curve");
-	    for( values %ctx ) {
-		Net::SSLeay::CTX_set_tmp_ecdh($_,$ecdh) or
+    if ( my $curve = $arg_hash->{SSL_ecdh_curve} ) {
+	return IO::Socket::SSL->_internal_error(
+	    "ECDH curve needs Net::SSLeay>=1.56 and OpenSSL>=1.0",9)
+	    if ! $can_ecdh;
+
+	for(values %ctx) {
+	    if ($arg_hash->{SSL_server} and $curve eq 'auto') {
+		if ($can_ecdh eq 'can_auto') {
+			Net::SSLeay::CTX_set_ecdh_auto($_,1) or
+			    return IO::Socket::SSL->error(
+			    "failed to set ECDH curve context");
+		} elsif ($can_ecdh eq 'auto') {
+		    # automatically enabled anyway
+		} else {
 		    return IO::Socket::SSL->error(
-		    "failed to set ECDH curve context");
+			"SSL_CTX_set_ecdh_auto not implemented");
+		}
+
+	    } elsif ($set_groups_list) {
+		$set_groups_list->($_,$curve) or return IO::Socket::SSL->error(
+		    "failed to set ECDH groups/curves on context");
+		# needed for OpenSSL 1.0.2 if ($can_ecdh eq 'can_auto') {
+		Net::SSLeay::CTX_set_ecdh_auto($_,1) if $can_ecdh eq 'can_auto';
+	    } elsif ($curve =~m{:}) {
+		return IO::Socket::SSL->error(
+		    "SSL_CTX_groups_list or SSL_CTX_curves_list not implemented");
+
+	    } elsif ($arg_hash->{SSL_server}) {
+		if ( $curve !~ /^\d+$/ ) {
+		    # name of curve, find NID
+		    $curve = Net::SSLeay::OBJ_txt2nid($curve)
+			|| return IO::Socket::SSL->error(
+			"cannot find NID for curve name '$curve'");
+		}
+		my $ecdh = Net::SSLeay::EC_KEY_new_by_curve_name($curve) or
+		    return IO::Socket::SSL->error(
+		    "cannot create curve for NID $curve");
+		for( values %ctx ) {
+		    Net::SSLeay::CTX_set_tmp_ecdh($_,$ecdh) or
+			return IO::Socket::SSL->error(
+			"failed to set ECDH curve context");
+		}
+		Net::SSLeay::EC_KEY_free($ecdh);
 	    }
-	    Net::SSLeay::EC_KEY_free($ecdh);
 	}
     }
 
@@ -2636,11 +2753,16 @@ sub new {
     my @accept_fp;
     if ( my $fp = $arg_hash->{SSL_fingerprint} ) {
 	for( ref($fp) ? @$fp : $fp) {
-	    my ($algo,$pubkey,$digest) = m{^([\w-]+)\$(pub\$)?([a-f\d:]+)$}i;
-	    return IO::Socket::SSL->_internal_error("invalid fingerprint '$_'",9)
-		if ! $algo;
-	    $algo = lc($algo);
+	    my ($algo,$pubkey,$digest) = m{^(?:([\w-]+)\$)?(pub\$)?([a-f\d:]+)$}i
+		or return IO::Socket::SSL->_internal_error("invalid fingerprint '$_'",9);
 	    ( $digest = lc($digest) ) =~s{:}{}g;
+	    $algo ||=
+		length($digest) == 32 ? 'md5' :
+		length($digest) == 40 ? 'sha1' :
+		length($digest) == 64 ? 'sha256' :
+		return IO::Socket::SSL->_internal_error(
+		    "cannot detect hash algorithem from fingerprint '$_'",9);
+	    $algo = lc($algo);
 	    push @accept_fp,[ $algo, $pubkey || '', pack('H*',$digest) ]
 	}
     }
@@ -2829,6 +2951,33 @@ sub new {
 	$self->{session_cache} = IO::Socket::SSL::Session_Cache->new( $size );
     }
 
+
+    if ($self->{session_cache} and %sess_cb) {
+	Net::SSLeay::CTX_set_session_cache_mode($ctx,
+	    Net::SSLeay::SESS_CACHE_CLIENT());
+	my $cache = $self->{session_cache};
+	$sess_cb{new}($ctx, sub {
+	    my ($ssl,$session) = @_;
+	    my $self = ($SSL_OBJECT{$ssl} || do {
+		warn "callback session new: no known SSL object for $ssl";
+		return;
+	    })->[0];
+	    my $args = ${*$self}{_SSL_arguments};
+	    my $key = $args->{SSL_session_key} or do {
+		warn "callback session new: no known SSL_session_key for $ssl";
+		return;
+	    };
+	    $DEBUG>=3 && DEBUG("callback session new <$key> $session");
+	    Net::SSLeay::SESSION_up_ref($session);
+	    $cache->add_session($key,$session);
+	});
+	$sess_cb{remove}($ctx, sub {
+	    my ($ctx,$session) = @_;
+	    $DEBUG>=3 && DEBUG("callback session remove $session");
+	    $cache->del_session(undef,$session);
+	});
+    }
+
     return $self;
 }
 
@@ -2861,82 +3010,193 @@ sub DESTROY {
 }
 
 package IO::Socket::SSL::Session_Cache;
-use strict;
+*DEBUG = *IO::Socket::SSL::DEBUG;
+use constant {
+    SESSION => 0,
+    KEY     => 1,
+    GNEXT   => 2,
+    GPREV   => 3,
+    SNEXT   => 4,
+    SPREV   => 5,
+};
 
 sub new {
     my ($class, $size) = @_;
     $size>0 or return;
-    return bless { _maxsize => $size }, $class;
-}
-
-
-sub del_session {
-    my ($self, $key) = @_;
-    my $val = delete $self->{$key} or return;
-    Net::SSLeay::SESSION_free($val->{session});
-    $val->{prev}{next} = $val->{next};
-    $val->{next}{prev} = $val->{prev};
-    if ($val != $self->{_head}) {
-	# keep head
-    } elsif ($val == $val->{next}) {
-	# single element in cache, drop it
-	$self->{_head} = undef
-    } else {
-	# point to next element in cache
-	$self->{_head} = $val->{next}
-    }
-}
-
-sub get_session {
-    my ($self, $key) = @_;
-    my $session = $self->{$key} || return;
-    return $session->{session} if ($self->{'_head'} eq $session);
-    $session->{prev}->{next} = $session->{next};
-    $session->{next}->{prev} = $session->{prev};
-    $session->{next} = $self->{'_head'};
-    $session->{prev} = $self->{'_head'}->{prev};
-    $self->{'_head'}->{prev} = $self->{'_head'}->{prev}->{next} = $session;
-    $self->{'_head'} = $session;
-    return $session->{session};
+    return bless {
+	room  => $size,
+	ghead => undef,
+	shead => {},
+    }, $class;
 }
 
 sub add_session {
-    my ($self, $key, $val) = @_;
-    return if ($key eq '_maxsize' or $key eq '_head');
+    my ($self, $key, $session) = @_;
 
-    if ( my $have = $self->{$key} ) {
-	Net::SSLeay::SESSION_free( $have->{session} );
-	$have->{session} = $val;
-	return get_session($self,$key); # will put key on front
+    # create new
+    my $v = [];
+    $v->[SESSION] = $session;
+    $v->[KEY] = $key;
+    $DEBUG>=3 && DEBUG("add_session($key,$session)");
+    _add_entry($self,$v);
+}
+
+sub replace_session {
+    my ($self, $key, $session) = @_;
+    $self->del_session($key);
+    $self->add_session($key, $session);
+}
+
+sub del_session {
+    my ($self, $key, $session) = @_;
+    my ($head,$inext) = $key
+	? ($self->{shead}{$key},SNEXT) : ($self->{ghead},GNEXT);
+    my $v = $head;
+    my @del;
+    while ($v) {
+	if (!$session) {
+	    push @del,$v
+	} elsif ($v->[SESSION] == $session) {
+	    push @del, $v;
+	    last;
+	}
+	$v = $v->[$inext];
+	last if $v == $head;
+    }
+    $DEBUG>=3 && DEBUG("del_session("
+	. ($key ? $key : "undef")
+	. ($session ? ",$session) -> " : ") -> ")
+	.  (~~@del || 'none'));
+    for (@del) {
+	_del_entry($self,$_);
+	Net::SSLeay::SESSION_free($_->[SESSION]) if $_->[SESSION];
+    }
+    return ~~@del;
+}
+
+sub get_session {
+    my ($self, $key, $session) = @_;
+    my $v = $self->{shead}{$key};
+    if ($session) {
+	my $shead = $v;
+	while ($v) {
+	    $DEBUG>=3 && DEBUG("check $session - $v->[SESSION]");
+	    last if $v->[SESSION] == $session;
+	    $v = $v->[SNEXT];
+	    $v = undef if $v == $shead; # session not found
+	}
+    }
+    if ($v) {
+	_del_entry($self, $v); # remove
+	_add_entry($self, $v); # and add back on top
+    }
+    $DEBUG>=3 && DEBUG("get_session($key"
+	. ( $session ? ",$session) -> " : ") -> ")
+	. ($v? $v->[SESSION]:"none"));
+    return $v && $v->[SESSION];
+}
+
+sub _add_entry {
+    my ($self,$v) = @_;
+    for(
+	[ SNEXT, SPREV, \$self->{shead}{$v->[KEY]} ],
+	[ GNEXT, GPREV, \$self->{ghead} ],
+    ) {
+	my ($inext,$iprev,$rhead) = @$_;
+	if ($$rhead) {
+	    $v->[$inext] = $$rhead;
+	    $v->[$iprev] = ${$rhead}->[$iprev];
+	    ${$rhead}->[$iprev][$inext] = $v;
+	    ${$rhead}->[$iprev] = $v;
+	} else {
+	    $v->[$inext] = $v->[$iprev] = $v;
+	}
+	$$rhead = $v;
     }
 
-    my $session = $self->{$key} = { session => $val, key => $key };
+    $self->{room}--;
 
-    if ( keys(%$self) > $self->{_maxsize}+2) {
-	my $last = $self->{'_head'}->{prev};
-	Net::SSLeay::SESSION_free($last->{session});
-	delete($self->{$last->{key}});
-	$self->{'_head'}->{prev} = $self->{'_head'}->{prev}->{prev};
-	delete($self->{'_head'}) if ($self->{'_maxsize'} == 1);
+    # drop old entries if necessary
+    if ($self->{room}<0) {
+	my $l = $self->{ghead}[GPREV];
+	_del_entry($self,$l);
+	Net::SSLeay::SESSION_free($l->[SESSION]) if $l->[SESSION];
+    }
+}
+
+sub _del_entry {
+    my ($self,$v) = @_;
+    for(
+	[ SNEXT, SPREV, \$self->{shead}{$v->[KEY]} ],
+	[ GNEXT, GPREV, \$self->{ghead} ],
+    ) {
+	my ($inext,$iprev,$rhead) = @$_;
+	$$rhead or return;
+	$v->[$inext][$iprev] = $v->[$iprev];
+	$v->[$iprev][$inext] = $v->[$inext];
+	if ($v != $$rhead) {
+	    # not removed from top of list
+	} elsif ($v->[$inext] == $v) {
+	    # was only element on list, drop list
+	    if ($inext == SNEXT) {
+		delete $self->{shead}{$v->[KEY]};
+	    } else {
+		$$rhead = undef;
+	    }
+	} else {
+	    # was top element, keep others
+	    $$rhead = $v->[$inext];
+	}
+    }
+    $self->{room}++;
+}
+
+sub _dump {
+    my $self = shift;
+
+    my %v2i;
+    my $v = $self->{ghead};
+    while ($v) {
+	exists $v2i{$v} and die;
+	$v2i{$v} = int(keys %v2i);
+	$v = $v->[GNEXT];
+	last if $v == $self->{ghead};
     }
 
-    if ($self->{'_head'}) {
-	$session->{next} = $self->{'_head'};
-	$session->{prev} = $self->{'_head'}->{prev};
-	$self->{'_head'}->{prev}->{next} = $session;
-	$self->{'_head'}->{prev} = $session;
-    } else {
-	$session->{next} = $session->{prev} = $session;
+    my $out = "room: $self->{room}\nghead:\n";
+    $v = $self->{ghead};
+    while ($v) {
+	$out .= sprintf(" - [%d] <%d,%d> '%s' <%s>\n",
+	    $v2i{$v}, $v2i{$v->[GPREV]}, $v2i{$v->[GNEXT]},
+	    $v->[KEY], $v->[SESSION]);
+	$v = $v->[GNEXT];
+	last if $v == $self->{ghead};
     }
-    $self->{'_head'} = $session;
-    return $session;
+    $out .= "shead:\n";
+    for my $key (sort keys %{$self->{shead}}) {
+	$out .= " - '$key'\n";
+	my $shead = $self->{shead}{$key};
+	my $v = $shead;
+	while ($v) {
+	    $out .= sprintf("   - [%d] <%d,%d> '%s' <%s>\n",
+		$v2i{$v}, $v2i{$v->[SPREV]}, $v2i{$v->[SNEXT]},
+		$v->[KEY], $v->[SESSION]);
+	    $v = $v->[SNEXT];
+	    last if $v == $shead;
+	}
+    }
+    return $out;
 }
 
 sub DESTROY {
     my $self = shift;
-    delete(@{$self}{'_head','_maxsize'});
-    for (values %$self) {
-	Net::SSLeay::SESSION_free($_->{session} || next);
+    delete $self->{shead};
+    my $v = delete $self->{ghead};
+    while ($v) {
+	Net::SSLeay::SESSION_free($v->[SESSION]) if $v->[SESSION];
+	my $next = $v->[GNEXT];
+	@$v = ();
+	$v = $next;
     }
 }
 

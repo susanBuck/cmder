@@ -1,5 +1,25 @@
 # Release Notes
 
+## 0.3.5 (Dec 5, 2019)
+
+  * eb3099e [git] Add `restore` and `switch` commands (#119)
+  * 50954bc [.net] Add completions for dotnet (#120)
+  * aa0541f [k8s] Basic kubectl completion script (#113)
+  * a3339f8 [py] Added pipenv completion (#111)
+  * 8228a33 [py] Added pip completion (#110)
+  * b366d5d [scoop] Added scoop completions (#109)
+  * 4a8056d [.net] Add netcoreapp3.1 (#123)
+
+## 0.3.4 (Aug 19, 2019)
+
+Improvements/bugfixes for git completions/prompt
+
+  * f85c7a1 [git] fix gsub branch (#114)
+  * bf114aa [git] Add support for detecting branch names in worktrees (#96)
+  * 5d33037 [git] Add missing clone options for git (#106)
+  * b2d207d [net] Add three remaining help topics (#107)
+  * 781c0bf Don't default to origin if no remote is configured (#102)
+
 ## 0.3.3 (Oct 24, 2017)
 
 A lot of improvements for vagrant completions (thanks to @Andegawen) and a few bugfixes for `yarn`, `ssh` and `git`.
